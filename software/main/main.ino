@@ -11,7 +11,7 @@
 #include <EEPROM.h> // Arduino EEPROM lib
 
 
-// constant global values section ---begin---
+// constant global values section 
 // Sensors pins
 #define GROUND_HUM_SENSOR_PIN A0 // Port I
 #define AIR_SENSOR_PIN 11 // Port III
@@ -59,3 +59,41 @@ DallasTemperature ground_temp_sensor(&oneWire);
 DHT air_sensor(AIR_SENSOR_PIN, DHT11);
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 
+
+// const arrays for loops
+const int relays_pins[6] = {
+  DAY_LIGHT_RELAY_PIN,
+  NIGHT_LIGHT_RELAY_PIN,
+  AIR_HEATER_RELAY_PIN,
+  GROUND_HEATER_RELAY_PIN,
+  WATER_RELAY_PIN,
+  VENT_IN_RELAY_PIN,
+  VENT_OUT_RELAY_PIN,
+  UNKNOWN_RELAY_A_PIN
+};
+
+void setup() {
+  // init & clear LCD
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.clear();
+
+  // init sensors
+  air_sensor.begin();
+  ground_temp_sensor.begin();
+  ground_temp_sensor.setResolution(12);
+
+  // set up pin modes and off all relays
+  for (int i = 2; i <= 9; i++) {
+    pinMode(relays_pins[i], OUTPUT);
+    digitalWrite(relays_pins[i], LOW);
+  }
+  pinMode(BUTTONS_PIN, INPUT); 
+  pinMode(SETUP_JUMPER, INPUT_PULLUP);
+
+}
+
+void loop() {
+
+}
