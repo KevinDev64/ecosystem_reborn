@@ -44,3 +44,18 @@ float ground_temp_max = 27.0;
 float ground_hum_min = 30.0;
 float ground_hum_max = 90.0;
 
+
+// Relay on/off flags
+bool day_light_flag, night_light_flag;
+bool air_heater_flag, ground_heater_flag;
+bool water_flag;
+bool vent_in_flag, vent_out_flag;
+bool unknown_device_flag; // (can be used later)
+
+
+// Define sensors & LCD
+OneWire oneWire(GROUND_TEMP_SENSOR_PIN);
+DallasTemperature ground_temp_sensor(&oneWire);
+DHT air_sensor(AIR_SENSOR_PIN, DHT11);
+LiquidCrystal_I2C lcd(0x27, 20, 4);
+
