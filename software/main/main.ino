@@ -5,11 +5,10 @@
 // include libs
 #include <OneWire.h> // Ground temp sens interface
 #include <DallasTemperature.h> // Ground temp sens lib
-
 #include <DHT.h> // Air temp and humidity sensor lib
-
 #include <Wire.h> // I2C lib
 #include <LiquidCrystal_I2C.h> // LCD lib 
+#include <EEPROM.h> // Arduino EEPROM lib
 
 
 // constant global values section ---begin---
@@ -31,3 +30,17 @@
 // Control pins
 #define BUTTONS_PIN A0 // Left, Right, OK, Cancel analog buttons
 #define SETUP_JUMPER 10 // If on setup will appear
+
+
+// Default threshold values (can be changed in setup)
+float air_temp_min_crit = 17.0;
+float air_temp_min = 23.0;
+float air_temp_max = 30.0;
+float air_temp_max_crit = 35.0;
+
+float ground_temp_min = 20.0;
+float ground_temp_max = 27.0;
+
+float ground_hum_min = 30.0;
+float ground_hum_max = 90.0;
+
