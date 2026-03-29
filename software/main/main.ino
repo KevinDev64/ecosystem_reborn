@@ -13,6 +13,9 @@
 
 
 // constant global values section 
+// Software version
+#define ECOSYSTEM_VERSION 1.0
+
 // Sensors pins
 #define GROUND_HUM_SENSOR_PIN A0 // Port I
 #define GROUND_TEMP_SENSOR_PIN 12 // Port II
@@ -111,7 +114,7 @@ void setup() {
   ground_temp_sensor.setResolution(12);
 
   // set up pin modes and off all relays
-  for (int i = 2; i <= 9; i++) {
+  for (int i = 0; i <= 7; i++) {
     pinMode(relays_pins[i], OUTPUT);
     digitalWrite(relays_pins[i], LOW);
   }
@@ -122,7 +125,8 @@ void setup() {
   if (EEPROM.read(EEPROM_INIT_ADDR) != EEPROM_INIT_KEY) {
     // first start => setup jumper must be setted
     while (digitalRead(SETUP_JUMPER) != 0) {
-      lcd.print("ecosystem v1.0");
+      lcd.print("ecosystem v");
+      lcd.print(ECOSYSTEM_VERSION);
       lcd.setCursor(0, 1);
       lcd.print("--------------------");
       lcd.setCursor(0, 2);
@@ -132,19 +136,24 @@ void setup() {
     }
 
     // show info message and start editor after delay
-    lcd.clear();
-    lcd.print("Press RESET");
-    lcd.setCursor(0, 1);
-    lcd.print("after editing");
-    delay(3000); 
+    print_jumper_warning();
 
     void set_default_values();
     void setup_settings();
+  } else {
+    if (digitalRead(SETUP_JUMPER) != 0) {
+      print_jumper_warning();
+      read_settings_from_EEPROM();
+    }
   }
-}
+  read_settings_from_EEPROM();
+  print_welcome();
 
-void loop() {
+  // power on vent (air: ecosystem -> outside)
+  digitalWrite(VENT_OUT_RELAY_PIN, HIGH);
 
+  // set screen_timer
+  screen_timer = millis();
 }
 
 void setup_settings() {
@@ -155,7 +164,7 @@ void setup_settings() {
   buttons_timer = millis();
 
   // LCD update timer
-  if (millis() >= (screen_timer + 1000)) {
+  if (millis() >= (screen_timer + 750)) {
     screen_timer = millis(); 
     lcd_print_setup_settings(setting_index);
   }
@@ -167,12 +176,12 @@ void setup_settings() {
     if (left_button_flag) { 
       *settings_values_table[setting_index] -= 0.1; 
       eeprom_address = setting_index * 4;
-      EEPROM.write(eeprom_address, settings_values_table[setting_index]);
+      EEPROM.write(eeprom_address, *settings_values_table[setting_index]);
     }
     if (right_button_flag) {
       *settings_values_table[setting_index] += 0.1;
       eeprom_address = setting_index * 4;
-      EEPROM.write(eeprom_address, settings_values_table[setting_index]);
+      EEPROM.write(eeprom_address, *settings_values_table[setting_index]);
     } 
     if (ok_button_flag)     {
       if (setting_index == 7) { setting_index = 0; }
@@ -242,4 +251,42 @@ void set_default_values() {
   EEPROM.write(28, ground_hum_max);
 
   EEPROM.write(1023, EEPROM_INIT_KEY);
+}
+
+void print_jumper_warning() {
+  lcd.clear();
+  lcd.print("Please remove the");
+  lcd.setCursor(0, 1);
+  lcd.print("JMP_SETUP and press");
+  lcd.setCursor(0, 2);
+  lcd.print("RESET button after");
+  lcd.setCursor(0, 3);
+  lcd.print("changing settings");
+  delay(3000); 
+}
+
+void read_settings_from_EEPROM() {
+  for (int i = 0; i <= 7; i++) {
+    *settings_values_table[i] = EEPROM.read(i * 8);
+  }
+}
+
+void print_welcome() {
+  lcd.clear();
+  lcd.print("ecosystem v");
+  lcd.print(ECOSYSTEM_VERSION);
+  lcd.setCursor(0, 1);
+  lcd.print("--------------------");
+  lcd.setCursor(0, 2);
+  lcd.print("Made by KevinDev64");
+  lcd.setCursor(0, 3);
+  lcd.print("Have a good day!");
+  delay(3000);
+}
+
+void loop() {
+  lcd.clear();
+  if (millis() >= (screen_timer + 750)) {
+    
+  }
 }
