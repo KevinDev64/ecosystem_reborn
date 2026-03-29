@@ -1,6 +1,6 @@
 // main.ino 
 // Copyright 2026 Mikhail Sulim <KevinDev64>
-// Email: KevinDev64 <kevindev56@yandex.ru>
+// Written by: KevinDev64 <kevindev56@yandex.ru>
 
 // include libs
 #include <OneWire.h> // Ground temp sens interface
@@ -15,8 +15,8 @@
 // constant global values section 
 // Sensors pins
 #define GROUND_HUM_SENSOR_PIN A0 // Port I
-#define AIR_SENSOR_PIN 11 // Port III
 #define GROUND_TEMP_SENSOR_PIN 12 // Port II
+#define AIR_SENSOR_PIN 11 // Port III
 
 // Relays pins 
 #define DAY_LIGHT_RELAY_PIN 2 // Port H
@@ -150,6 +150,7 @@ void loop() {
 void setup_settings() {
   // Settings menu for changing threshold values
   int setting_index = 0;
+  int eeprom_address = setting_index * 4;
   screen_timer = millis();
   buttons_timer = millis();
 
@@ -165,9 +166,14 @@ void setup_settings() {
     get_control_buttons_values();
     if (left_button_flag) { 
       *settings_values_table[setting_index] -= 0.1; 
-      // TODO: find index in setting_names_array and write new value to EEPROM
+      eeprom_address = setting_index * 4;
+      EEPROM.write(eeprom_address, settings_values_table[setting_index]);
     }
-    if (right_button_flag)  *settings_values_table[setting_index] += 0.1;
+    if (right_button_flag) {
+      *settings_values_table[setting_index] += 0.1;
+      eeprom_address = setting_index * 4;
+      EEPROM.write(eeprom_address, settings_values_table[setting_index]);
+    } 
     if (ok_button_flag)     {
       if (setting_index == 7) { setting_index = 0; }
       else { setting_index += 1; }
