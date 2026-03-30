@@ -8,6 +8,7 @@
 #include <DHT.h> // Air temp and humidity sensor lib
 #include <Wire.h> // I2C lib
 #include <LiquidCrystal_I2C.h> // LCD lib 
+#include <iarduino_RTC.h>
 #include <EEPROM.h> // Arduino EEPROM lib
 #include <string.h> // string type
 
@@ -29,11 +30,16 @@
 #define WATER_RELAY_PIN 6 // Port D
 #define VENT_IN_RELAY_PIN 7 // Port C
 #define VENT_OUT_RELAY_PIN 8 // Port B
-#define UNKNOWN_RELAY_A_PIN 9 // Port A (device not connected)
+#define UNKNOWN_RELAY_A_PIN 9 // Port A (by default device not connected)
 
 // Control pins
 #define BUTTONS_PIN A0 // Left, Right, OK, Cancel analog buttons
 #define SETUP_JUMPER 10 // If on setup will appear
+
+// Ground humidity sensor calibration values 
+// TODO: debug script for calibration
+#define GROUND_HUM_MAX 255
+#define GROUND_HUM_MIN 600
 
 // EEPROM init values
 #define EEPROM_INIT_ADDR 1023
@@ -69,12 +75,20 @@ bool unknown_device_flag; // (can be used later)
 uint64_t screen_timer;
 uint64_t buttons_timer;
 
-// Define sensors & LCD
+// RTC
+unsigned short rtc_hours {};
+unsigned short rtc_minutes {};
+
+// instant values
+float air_temp, ground_temp;
+int air_humidity, ground_hum;
+
+// Define sensors, LCD, RTC
 OneWire oneWire(GROUND_TEMP_SENSOR_PIN);
 DallasTemperature ground_temp_sensor(&oneWire);
 DHT air_sensor(AIR_SENSOR_PIN, DHT11);
 LiquidCrystal_I2C lcd(0x27, 20, 4);
-
+iarduino_RTC time(RTC_DS3231);
 
 // const arrays for loops
 const int relays_pins[8] = {
@@ -113,6 +127,9 @@ void setup() {
   ground_temp_sensor.begin();
   ground_temp_sensor.setResolution(12);
 
+  // init RTC module
+  time.begin();
+
   // set up pin modes and off all relays
   for (int i = 0; i <= 7; i++) {
     pinMode(relays_pins[i], OUTPUT);
@@ -126,7 +143,7 @@ void setup() {
     // first start => setup jumper must be setted
     while (digitalRead(SETUP_JUMPER) != 0) {
       lcd.print("ecosystem v");
-      lcd.print(ECOSYSTEM_VERSION);
+      lcd.print(String(ECOSYSTEM_VERSION));
       lcd.setCursor(0, 1);
       lcd.print("--------------------");
       lcd.setCursor(0, 2);
@@ -200,7 +217,7 @@ void lcd_print_setup_settings(int setting_index) {
   lcd.print(settings_names_array[setting_index]);
   lcd.setCursor(0, 1);
   lcd.print("Value: ");
-  lcd.print(*settings_values_table[setting_index]);
+  lcd.print(String(*settings_values_table[setting_index]));
   lcd.setCursor(0, 2);
   lcd.print("L(-0.1)  R(+0.1)");
   lcd.setCursor(0, 3);
@@ -274,7 +291,7 @@ void read_settings_from_EEPROM() {
 void print_welcome() {
   lcd.clear();
   lcd.print("ecosystem v");
-  lcd.print(ECOSYSTEM_VERSION);
+  lcd.print(String(ECOSYSTEM_VERSION));
   lcd.setCursor(0, 1);
   lcd.print("--------------------");
   lcd.setCursor(0, 2);
@@ -284,9 +301,97 @@ void print_welcome() {
   delay(3000);
 }
 
-void loop() {
+void print_info_screen(uint8_t type) {
   lcd.clear();
+  switch (type) {
+    case 0:
+      print_screen_0();
+  }
+}
+
+void print_screen_0()
+{
+  lcd.clear();
+  lcd.print(String(rtc_hours));
+  lcd.print(":");
+  lcd.print(String(rtc_minutes));
+  lcd.print(" ");
+  lcd.print("v.1.0 STAT:");
+  // lcd.print(system_status);
+
+  lcd.setCursor(0, 1);
+
+  lcd.print("TEMP");
+  lcd.print(String(air_temp));
+  lcd.print("/");
+  lcd.print(String(ground_temp));
+  lcd.print("V");
+  if (air_cool_flag == true)  lcd.print("+");
+  if (air_cool_flag == false) lcd.print("x");
+
+  lcd.setCursor(0, 2);
+
+  lcd.print("HUM ");
+  lcd.print(String(air_humidity));
+  lcd.print("/");
+  lcd.print(String(ground_hum));
+  lcd.print(" LIGHT");
+  if (day_light_flag == true)    lcd.print("+");
+  if (day_light_flag == false)   lcd.print("x");
+  lcd.print("/");
+  if (night_light_flag == true)  lcd.print("+");
+  if (night_light_flag == false) lcd.print("x");
+
+  lcd.setCursor(0, 3);
+
+  lcd.print("HEAT ");
+  if (air_heat_flag == true)     lcd.print("+");
+  if (air_heat_flag == false)    lcd.print("x");
+  lcd.print("/");
+  if (ground_heat_flag == true)  lcd.print("+");
+  if (ground_heat_flag == false) lcd.print("x");
+  lcd.print(" WATER ");
+  if (water_flag == true)        lcd.print("+");
+  if (water_flag == false)       lcd.print("x");
+}
+
+void get_rtc_time() {
+  time.gettime();
+  rtc_minutes = time.minutes;
+  rtc_hours = time.hours;
+}
+
+void read_air_sensor()
+{
+  air_temp = air_sensor.readTemperature();
+  air_humidity = air_sensor.readHumidity();
+}
+
+void read_ground_sensors() {
+  int raw_ground_hum;
+  raw_ground_hum = analogRead(GROUND_HUM_SENSOR_PIN);
+  ground_hum = map(raw_ground_hum, GROUND_HUM_MIN, GROUND_HUM_MAX, 0, 100);
+
+  ground_temp_sensor.requestTemperatures();
+  ground_temp = ground_temp_sensor.getTempCByIndex(0);
+}
+
+void read_sensors() {
+  read_air_sensor();
+  read_ground_sensors();
+}
+
+void check_ecosystem_state() {
+  
+}
+
+void loop() {
+  get_rtc_time();
+  read_sensors();
+  
+  check_ecosystem_state();
+
   if (millis() >= (screen_timer + 750)) {
-    
+    print_info_screen(0);
   }
 }
