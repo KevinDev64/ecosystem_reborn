@@ -15,7 +15,7 @@
 
 // constant global values section 
 // Software version
-#define ECOSYSTEM_VERSION 1.0
+#define ECOSYSTEM_VERSION 2.0
 
 // Sensors pins
 #define GROUND_HUM_SENSOR_PIN A0 // Port I
@@ -66,14 +66,21 @@ float ground_hum_max = 90.0;
 // Relay on/off flags
 bool day_light_flag, night_light_flag;
 bool air_heater_flag, ground_heater_flag;
-bool water_flag;
+bool water_pump_flag;
 bool vent_in_flag, vent_out_flag;
+bool air_cooler_flag;
 bool unknown_device_flag; // (can be used later)
 
+// Type of screen
+unsigned short screen_type {0};
 
 // Timers (for millis)
 uint64_t screen_timer;
 uint64_t buttons_timer;
+uint64_t update_type_timer;
+
+// Blink state
+bool blink_state {false};
 
 // RTC
 unsigned short rtc_hours {};
@@ -81,7 +88,7 @@ unsigned short rtc_minutes {};
 
 // instant values
 float air_temp, ground_temp;
-int air_humidity, ground_hum;
+int air_humidity, ground_humidity;
 
 // Define sensors, LCD, RTC
 OneWire oneWire(GROUND_TEMP_SENSOR_PIN);
@@ -115,12 +122,51 @@ float* settings_values_table[8] {
   &ground_hum_max
 };
 
+// Symbols 
+byte drop_full_symbol[] = {
+  B00100,
+  B01110,
+  B01110,
+  B11111,
+  B11111,
+  B11111,
+  B11111,
+  B01110
+};
+
+byte drop_empty_symbol[] = {
+  B00100,
+  B01010,
+  B01010,
+  B10001,
+  B10001,
+  B10001,
+  B10001,
+  B01110
+};
+
+byte light_symbol[] = {
+  B00000,
+  B00000,
+  B10101,
+  B01110,
+  B11111,
+  B01110,
+  B10101,
+  B00000
+};
+
 void setup() {
   // init & clear LCD
   lcd.init();
   lcd.backlight();
   lcd.setCursor(0, 0);
   lcd.clear();
+
+  // init custom chars
+  lcd.createChar(0, drop_full_symbol);
+  lcd.createChar(1, drop_empty_symbol);
+  lcd.createChar(2, light_symbol);
 
   // init sensors
   air_sensor.begin();
@@ -137,6 +183,14 @@ void setup() {
   }
   pinMode(BUTTONS_PIN, INPUT); 
   pinMode(SETUP_JUMPER, INPUT_PULLUP);
+
+  // set up `false` for all flags
+  day_light_flag, night_light_flag = false, false;
+  air_heater_flag, ground_heater_flag, air_cooler_flag = false, false, false;
+  water_pump_flag = false;
+  vent_in_flag = false;
+  vent_out_flag = false;
+  unknown_device_flag = false;
 
   // SETUP
   if (EEPROM.read(EEPROM_INIT_ADDR) != EEPROM_INIT_KEY) {
@@ -169,8 +223,9 @@ void setup() {
   // power on vent (air: ecosystem -> outside)
   digitalWrite(VENT_OUT_RELAY_PIN, HIGH);
 
-  // set screen_timer
+  // setup timers
   screen_timer = millis();
+  update_type_timer = millis();
 }
 
 void setup_settings() {
@@ -301,58 +356,183 @@ void print_welcome() {
   delay(3000);
 }
 
-void print_info_screen(uint8_t type) {
+void print_info_screen(uint8_t screen_type) {
   lcd.clear();
-  switch (type) {
+  switch (screen_type) {
     case 0:
       print_screen_0();
+    case 1:
+      print_screen_1();
+    case 2:
+      print_screen_2();
   }
 }
 
 void print_screen_0()
 {
   lcd.clear();
+  print_ecosystem_status();
+
+  lcd.print(" ");
   lcd.print(String(rtc_hours));
   lcd.print(":");
   lcd.print(String(rtc_minutes));
+
   lcd.print(" ");
-  lcd.print("v.1.0 STAT:");
-  // lcd.print(system_status);
+  print_blink();
 
   lcd.setCursor(0, 1);
-
-  lcd.print("TEMP");
-  lcd.print(String(air_temp));
-  lcd.print("/");
-  lcd.print(String(ground_temp));
-  lcd.print("V");
-  if (air_cool_flag == true)  lcd.print("+");
-  if (air_cool_flag == false) lcd.print("x");
+  print_flag_state(air_heater_flag, air_cooler_flag, String("AIR"));
+  lcd.print("  ");
+  print_flag_state(ground_heater_flag, false, String("GROUND"));
+  lcd.print("  ");
+  print_light_state();
 
   lcd.setCursor(0, 2);
+  print_water_state();
 
-  lcd.print("HUM ");
-  lcd.print(String(air_humidity));
-  lcd.print("/");
-  lcd.print(String(ground_hum));
-  lcd.print(" LIGHT");
-  if (day_light_flag == true)    lcd.print("+");
-  if (day_light_flag == false)   lcd.print("x");
-  lcd.print("/");
-  if (night_light_flag == true)  lcd.print("+");
-  if (night_light_flag == false) lcd.print("x");
+  lcd.print("  ");
+  print_vent_state();
 
   lcd.setCursor(0, 3);
+  lcd.print("ecosystem v");
+  lcd.print(ECOSYSTEM_VERSION);
 
-  lcd.print("HEAT ");
-  if (air_heat_flag == true)     lcd.print("+");
-  if (air_heat_flag == false)    lcd.print("x");
-  lcd.print("/");
-  if (ground_heat_flag == true)  lcd.print("+");
-  if (ground_heat_flag == false) lcd.print("x");
-  lcd.print(" WATER ");
-  if (water_flag == true)        lcd.print("+");
-  if (water_flag == false)       lcd.print("x");
+  lcd.print(" ");
+  lcd.print("page0");
+}
+
+void print_screen_1() {
+  lcd.clear();
+  print_ecosystem_status();
+
+  lcd.print(" ");
+  lcd.print(String(rtc_hours));
+  lcd.print(":");
+  lcd.print(String(rtc_minutes));
+
+  lcd.print(" ");
+  print_blink();
+
+  lcd.setCursor(0, 1);
+  print_sensors(air_temp, air_humidity, String("AIR   "));
+  
+  lcd.setCursor(0, 2);
+  print_sensors(ground_temp, ground_humidity, String("GROUND"));
+
+  lcd.setCursor(0, 3);
+  lcd.print("ecosystem v");
+  lcd.print(ECOSYSTEM_VERSION);
+  lcd.print(" page1");
+}
+
+void print_screen_2() {
+  lcd.clear();
+  print_ecosystem_status();
+
+  lcd.print(" ");
+  lcd.print(String(rtc_hours));
+  lcd.print(":");
+  lcd.print(String(rtc_minutes));
+
+  lcd.print(" ");
+  print_blink();
+
+  lcd.setCursor(0, 1);
+  lcd.print("made by KevinDev64");
+
+  lcd.setCursor(0, 2);
+  lcd.print("have a good day!");
+
+  lcd.setCursor(0, 3);
+  lcd.print("ecosystem v");
+  lcd.print(ECOSYSTEM_VERSION);
+  lcd.print(" page2");
+}
+
+void print_sensors(float temperature, int humudity, String name) {
+  lcd.print(name);
+  lcd.print(" ");
+  lcd.print(String(temperature));
+  lcd.print("\xef");
+  lcd.print(" ");
+  lcd.print(String(humudity));
+}
+
+void print_vent_state() {
+  lcd.print("VENT:");
+  if (vent_in_flag and vent_out_flag) {
+    lcd.print("A");
+    return;
+  }
+  if (vent_in_flag) {
+    lcd.print("\xd9");
+    return;
+  }
+  if (vent_out_flag) {
+    lcd.print("\xda");
+    return;
+  }
+}
+
+void print_water_state() {
+  lcd.print("WATER:");
+  if (water_pump_flag) {
+    lcd.write(1);
+  } else {
+    lcd.write(0);
+  }
+}
+
+void print_light_state() {
+  lcd.write(2);
+  lcd.print(":");
+  if (day_light_flag) {
+    lcd.print("A");
+    return;
+  }
+  if (night_light_flag) {
+    lcd.print("N");
+    return;
+  }
+  lcd.print("x");
+  return;
+}
+
+void print_blink() {
+  if (blink_state) {
+    lcd.print("\x92");
+    blink_state = false;
+  } else {
+    lcd.print("\x93");
+    blink_state = true;
+  }
+}
+
+void print_flag_state(bool positive_changes_flag, bool negative_changes_flag, String name) {
+  lcd.print(name);
+  lcd.print(":");
+  if (positive_changes_flag) {
+    lcd.print("\xd9");
+    return;
+  }
+  if (negative_changes_flag) {
+    lcd.print("\xda");
+    return;
+  }
+  if ((!positive_changes_flag) and !(negative_changes_flag)) {
+    lcd.print("\x94");
+    return;
+  }
+}
+
+void print_ecosystem_status() {
+  lcd.print("STATUS: ");
+  if (air_heater_flag or air_cooler_flag or ground_heater_flag or water_pump_flag) {
+    lcd.print("bad");
+  } else {
+    lcd.print("ok");
+  }
 }
 
 void get_rtc_time() {
@@ -370,7 +550,7 @@ void read_air_sensor()
 void read_ground_sensors() {
   int raw_ground_hum;
   raw_ground_hum = analogRead(GROUND_HUM_SENSOR_PIN);
-  ground_hum = map(raw_ground_hum, GROUND_HUM_MIN, GROUND_HUM_MAX, 0, 100);
+  ground_humidity = map(raw_ground_hum, GROUND_HUM_MIN, GROUND_HUM_MAX, 0, 100);
 
   ground_temp_sensor.requestTemperatures();
   ground_temp = ground_temp_sensor.getTempCByIndex(0);
@@ -381,8 +561,84 @@ void read_sensors() {
   read_ground_sensors();
 }
 
+// TODO: add setup of time
 void check_ecosystem_state() {
+  if (rtc_hours >= 0 and rtc_hours < 3)                          { 
+                                                                   day_light_flag = false;
+                                                                   night_light_flag = false; }
+  if (rtc_hours >= 3 and rtc_hours < 7)                          {
+                                                                   day_light_flag = false;
+                                                                   night_light_flag = true;  }
+  if (rtc_hours >= 7 and rtc_hours < 18)                         {
+                                                                   day_light_flag = true;
+                                                                   night_light_flag = true;  }
+  if (rtc_hours >= 18 and rtc_hours < 21)                        {
+                                                                   day_light_flag = false;
+                                                                   night_light_flag = true;  }
+  if (rtc_hours >= 21)                                           {
+                                                                   day_light_flag = false;
+                                                                   night_light_flag = false; }
+
+  if (air_temp <= air_temp_min and air_cooler_flag == false)         air_heater_flag = true;
+  if (air_heater_flag == true and air_temp >= air_temp_max)          air_heater_flag = false;
+  if (air_temp >= air_temp_max_crit and air_heater_flag == true)     air_cooler_flag = true;
+  if (air_cooler_flag == true and air_temp <= air_temp_max)          air_cooler_flag = false;
   
+  if (ground_temp <= ground_temp_min)                              ground_heater_flag = true;
+  if (ground_heater_flag == true and ground_temp >= ground_temp_max) ground_heater_flag = false;
+
+  if (ground_humidity <= ground_hum_min)                                water_pump_flag = true;
+  if (water_pump_flag == true and ground_humidity >= ground_hum_max)         water_pump_flag = false;
+}
+
+void apply_changes() {
+  if (day_light_flag == false) { 
+    digitalWrite(DAY_LIGHT_RELAY_PIN, LOW);
+  }
+
+  if (day_light_flag == true) { 
+    digitalWrite(DAY_LIGHT_RELAY_PIN, HIGH);
+  }
+
+  if (night_light_flag == false) {
+    digitalWrite(NIGHT_LIGHT_RELAY_PIN, LOW);
+  }
+
+  if (night_light_flag == true) { 
+    digitalWrite(NIGHT_LIGHT_RELAY_PIN, HIGH);
+  }
+
+  if (air_heater_flag == false) { 
+    digitalWrite(AIR_HEATER_RELAY_PIN, LOW);
+  }
+
+  if (air_heater_flag == true) { 
+    digitalWrite(AIR_HEATER_RELAY_PIN, HIGH); 
+  }
+
+  if (air_heater_flag or air_cooler_flag) {
+    digitalWrite(VENT_IN_RELAY_PIN, HIGH);
+  }
+
+  if ((!air_heater_flag) and (!air_cooler_flag)) {
+    digitalWrite(VENT_IN_RELAY_PIN, LOW);
+  }
+
+  if (ground_heater_flag == false) { 
+    digitalWrite(GROUND_HEATER_RELAY_PIN, LOW);
+  }
+
+  if (ground_heater_flag == true) { 
+    digitalWrite(GROUND_HEATER_RELAY_PIN, HIGH);
+  }
+
+  if (water_pump_flag == false) { 
+    digitalWrite(WATER_RELAY_PIN, LOW);
+  }
+
+  if (water_pump_flag == true) { 
+    digitalWrite(WATER_RELAY_PIN, HIGH);
+  }
 }
 
 void loop() {
@@ -390,8 +646,18 @@ void loop() {
   read_sensors();
   
   check_ecosystem_state();
+  apply_changes();
 
   if (millis() >= (screen_timer + 750)) {
     print_info_screen(0);
+  }
+  
+  if (millis() >= (update_type_timer + 10000)) {
+    update_type_timer = millis();
+    if (screen_type == 2) {
+      screen_type = 0;
+    } else {
+      screen_type += 1;
+    }
   }
 }
