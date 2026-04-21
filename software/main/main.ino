@@ -26,14 +26,17 @@
 #define DAY_LIGHT_RELAY_PIN 2 // Port H
 #define NIGHT_LIGHT_RELAY_PIN 3 // Port G
 #define AIR_HEATER_RELAY_PIN 4 // Port F
-#define GROUND_HEATER_RELAY_PIN 5 // Port E
-#define WATER_RELAY_PIN 6 // Port D
+#define GROUND_HEATER_RELAY_PIN 6 // Port D
+#define WATER_RELAY_PIN 5 // Port E
 #define VENT_IN_RELAY_PIN 7 // Port C
 #define VENT_OUT_RELAY_PIN 8 // Port B
 #define UNKNOWN_RELAY_A_PIN 9 // Port A (by default device not connected)
 
 // Control pins
-#define BUTTONS_PIN A0 // Left, Right, OK, Cancel analog buttons
+#define LEFT_BUTTON_PIN A1 
+#define RIGHT_BUTTON_PIN A2
+#define OK_BUTTON_PIN A3
+#define ESC_BUTTON_PIN A6 
 #define SETUP_JUMPER 10 // If on setup will appear
 
 // Ground humidity sensor calibration values 
@@ -43,24 +46,23 @@
 
 // EEPROM init values
 #define EEPROM_INIT_ADDR 1023
-#define EEPROM_INIT_KEY 77
+#define EEPROM_INIT_KEY 67
 
 // Buttons flags
 bool left_button_flag, right_button_flag;
 bool ok_button_flag, esc_button_flag;
-bool* buttons_array[4] {&left_button_flag, &right_button_flag, &ok_button_flag, &esc_button_flag};
 
 // Default threshold values (can be changed in setup)
-float air_temp_min_crit = 17.0;
-float air_temp_min = 23.0;
-float air_temp_max = 30.0;
-float air_temp_max_crit = 35.0;
+float air_temp_min_crit = 17.0; // unused (TODO: remove)
+float air_temp_min = 21.0;
+float air_temp_max = 27.0;
+float air_temp_max_crit = 29.0;
 
-float ground_temp_min = 20.0;
-float ground_temp_max = 27.0;
+float ground_temp_min = 18.0;
+float ground_temp_max = 22.5;
 
-float ground_hum_min = 30.0;
-float ground_hum_max = 90.0;
+float ground_hum_min = 40.0;
+float ground_hum_max = 70.0;
 
 
 // Relay on/off flags
@@ -164,9 +166,9 @@ void setup() {
   lcd.clear();
 
   // init custom chars
-  lcd.createChar(0, drop_full_symbol);
-  lcd.createChar(1, drop_empty_symbol);
-  lcd.createChar(2, light_symbol);
+  // lcd.createChar(0, drop_full_symbol);
+  // lcd.createChar(1, drop_empty_symbol);
+  // lcd.createChar(2, light_symbol);
 
   // init sensors
   air_sensor.begin();
@@ -181,7 +183,10 @@ void setup() {
     pinMode(relays_pins[i], OUTPUT);
     digitalWrite(relays_pins[i], LOW);
   }
-  pinMode(BUTTONS_PIN, INPUT); 
+  pinMode(LEFT_BUTTON_PIN, INPUT);
+  pinMode(RIGHT_BUTTON_PIN, INPUT);
+  pinMode(OK_BUTTON_PIN, INPUT);
+  pinMode(ESC_BUTTON_PIN, INPUT);
   pinMode(SETUP_JUMPER, INPUT_PULLUP);
 
   // set up `false` for all flags
@@ -196,6 +201,7 @@ void setup() {
   if (EEPROM.read(EEPROM_INIT_ADDR) != EEPROM_INIT_KEY) {
     // first start => setup jumper must be setted
     while (digitalRead(SETUP_JUMPER) != 0) {
+      lcd.clear();
       lcd.print("ecosystem v");
       lcd.print(String(ECOSYSTEM_VERSION));
       lcd.setCursor(0, 1);
@@ -204,17 +210,19 @@ void setup() {
       lcd.print("SET UP JMP_SETUP!");
       lcd.setCursor(0, 3);
       lcd.print("waiting...");
+      delay(500);
     }
 
     // show info message and start editor after delay
     print_jumper_warning();
 
-    void set_default_values();
-    void setup_settings();
+    set_default_values();
+    setup_settings();
   } else {
-    if (digitalRead(SETUP_JUMPER) != 0) {
+    if (digitalRead(SETUP_JUMPER) == 0) {
       print_jumper_warning();
       read_settings_from_EEPROM();
+      setup_settings();
     }
   }
   read_settings_from_EEPROM();
@@ -229,42 +237,43 @@ void setup() {
 }
 
 void setup_settings() {
-  // Settings menu for changing threshold values
+  // Settings menu for changing threshold and target values
   int setting_index = 0;
   int eeprom_address = setting_index * 4;
   screen_timer = millis();
   buttons_timer = millis();
 
-  // LCD update timer
-  if (millis() >= (screen_timer + 750)) {
-    screen_timer = millis(); 
-    lcd_print_setup_settings(setting_index);
-  }
+  while (true) {
+    // LCD update timer
+    if (millis() >= (screen_timer + 750)) {
+      screen_timer = millis(); 
+      lcd_print_setup_settings(setting_index);
+    }
 
-  // Buttons update timer
-  if (millis() >= (buttons_timer + 100)) {
-    buttons_timer = millis();
-    get_control_buttons_values();
-    if (left_button_flag) { 
-      *settings_values_table[setting_index] -= 0.1; 
-      eeprom_address = setting_index * 4;
-      EEPROM.write(eeprom_address, *settings_values_table[setting_index]);
-    }
-    if (right_button_flag) {
-      *settings_values_table[setting_index] += 0.1;
-      eeprom_address = setting_index * 4;
-      EEPROM.write(eeprom_address, *settings_values_table[setting_index]);
-    } 
-    if (ok_button_flag)     {
-      if (setting_index == 7) { setting_index = 0; }
-      else { setting_index += 1; }
-    }
-    if (esc_button_flag) {
-      if (setting_index == 0) { setting_index = 7; }
-      else { setting_index -= 1; }
+    // Buttons update timer
+    if (millis() >= (buttons_timer + 100)) {
+      buttons_timer = millis();
+      get_control_buttons_values();
+      if (left_button_flag) { 
+        *settings_values_table[setting_index] -= 0.1; 
+        eeprom_address = setting_index * 4;
+        EEPROM.write(eeprom_address, *settings_values_table[setting_index]);
+      }
+      if (right_button_flag) {
+        *settings_values_table[setting_index] += 0.1;
+        eeprom_address = setting_index * 4;
+        EEPROM.write(eeprom_address, *settings_values_table[setting_index]);
+      } 
+      if (ok_button_flag)     {
+        if (setting_index == 7) { setting_index = 0; }
+        else { setting_index += 1; }
+      }
+      if (esc_button_flag) {
+        if (setting_index == 0) { setting_index = 7; }
+        else { setting_index -= 1; }
+      }
     }
   }
-  
 }
 
 void lcd_print_setup_settings(int setting_index) {
@@ -280,35 +289,27 @@ void lcd_print_setup_settings(int setting_index) {
 } 
 
 void get_control_buttons_values() {
-  uint16_t rawButtonsValue = analogRead(BUTTONS_PIN);
-  if (rawButtonsValue >= 0 and rawButtonsValue <= 5) {
-    for (int i = 0; i <= 3; i++) {
-      *buttons_array[i] = false;
-    }
+  unsigned short left_button_raw = analogRead(LEFT_BUTTON_PIN);
+  unsigned short right_button_raw = analogRead(RIGHT_BUTTON_PIN);
+  unsigned short ok_button_raw = analogRead(OK_BUTTON_PIN);
+  unsigned short esc_button_raw = analogRead(ESC_BUTTON_PIN);
+
+  left_button_flag = false;
+  right_button_flag = false;
+  ok_button_flag = false;
+  esc_button_flag = false;
+
+  if (left_button_raw > 100) {
+    left_button_flag = true;
   }
-  if (rawButtonsValue >= 200 and rawButtonsValue <= 210) {
-    for (int i = 0; i <= 3; i++) {
-      *buttons_array[i] = false;
-    }
-    esc_button_flag = true;
-  }
-  if (rawButtonsValue >= 405 and rawButtonsValue <= 415) {
-    for (int i = 0; i <= 3; i++) {
-      *buttons_array[i] = false;
-    }
-    ok_button_flag = true;
-  }
-  if (rawButtonsValue >= 609 and rawButtonsValue <= 619) {
-    for (int i = 0; i <= 3; i++) {
-      *buttons_array[i] = false;
-    }
+  if (right_button_raw > 100) {
     right_button_flag = true;
   }
-  if (rawButtonsValue >= 813 and rawButtonsValue <= 823) {
-    for (int i = 0; i <= 3; i++) {
-      *buttons_array[i] = false;
-    }
-    left_button_flag = true;
+  if (ok_button_raw > 100) {
+    ok_button_flag = true;
+  }
+  if (esc_button_raw > 100) {
+    esc_button_flag = true;
   }
 }
 
@@ -327,7 +328,7 @@ void set_default_values() {
 
 void print_jumper_warning() {
   lcd.clear();
-  lcd.print("Please remove the");
+  lcd.print("Please, remove the");
   lcd.setCursor(0, 1);
   lcd.print("JMP_SETUP and press");
   lcd.setCursor(0, 2);
@@ -344,6 +345,8 @@ void read_settings_from_EEPROM() {
 }
 
 void print_welcome() {
+  randomSeed(analogRead(A7));
+  int r = random(5);
   lcd.clear();
   lcd.print("ecosystem v");
   lcd.print(String(ECOSYSTEM_VERSION));
@@ -352,7 +355,20 @@ void print_welcome() {
   lcd.setCursor(0, 2);
   lcd.print("Made by KevinDev64");
   lcd.setCursor(0, 3);
-  lcd.print("Have a good day!");
+
+  switch (r) {
+    case 0:
+      lcd.print("Have a good day!");
+    case 1:
+      lcd.print("All is possible.");
+    case 2:
+      lcd.print("You make it!");
+    case 3:
+      lcd.print("You define the life.");
+    case 4:
+      lcd.print("Keep flying!");
+  }
+
   delay(3000);
 }
 
@@ -368,9 +384,7 @@ void print_info_screen(uint8_t screen_type) {
   }
 }
 
-void print_screen_0()
-{
-  lcd.clear();
+void print_screen_0() {
   print_ecosystem_status();
 
   lcd.print(" ");
@@ -398,12 +412,10 @@ void print_screen_0()
   lcd.print("ecosystem v");
   lcd.print(ECOSYSTEM_VERSION);
 
-  lcd.print(" ");
-  lcd.print("page0");
+  lcd.print(" p0");
 }
 
 void print_screen_1() {
-  lcd.clear();
   print_ecosystem_status();
 
   lcd.print(" ");
@@ -423,11 +435,10 @@ void print_screen_1() {
   lcd.setCursor(0, 3);
   lcd.print("ecosystem v");
   lcd.print(ECOSYSTEM_VERSION);
-  lcd.print(" page1");
+  lcd.print(" p1");
 }
 
 void print_screen_2() {
-  lcd.clear();
   print_ecosystem_status();
 
   lcd.print(" ");
@@ -447,7 +458,7 @@ void print_screen_2() {
   lcd.setCursor(0, 3);
   lcd.print("ecosystem v");
   lcd.print(ECOSYSTEM_VERSION);
-  lcd.print(" page2");
+  lcd.print(" p2");
 }
 
 void print_sensors(float temperature, int humudity, String name) {
@@ -478,14 +489,17 @@ void print_vent_state() {
 void print_water_state() {
   lcd.print("WATER:");
   if (water_pump_flag) {
-    lcd.write(1);
+    lcd.print("\x92");
+    // lcd.write(1);
   } else {
-    lcd.write(0);
+    // lcd.write(0);
+    lcd.print("\x93");
   }
 }
 
 void print_light_state() {
-  lcd.write(2);
+  // lcd.write(2);
+  lcd.print("\x2a");
   lcd.print(":");
   if (day_light_flag) {
     lcd.print("A");
@@ -563,19 +577,19 @@ void read_sensors() {
 
 // TODO: add setup of time
 void check_ecosystem_state() {
-  if (rtc_hours >= 0 and rtc_hours < 3)                          { 
+  if (rtc_hours >= 0 and rtc_hours < 6)                          { 
                                                                    day_light_flag = false;
                                                                    night_light_flag = false; }
-  if (rtc_hours >= 3 and rtc_hours < 7)                          {
+  if (rtc_hours >= 6 and rtc_hours < 7)                          {
                                                                    day_light_flag = false;
                                                                    night_light_flag = true;  }
-  if (rtc_hours >= 7 and rtc_hours < 18)                         {
+  if (rtc_hours >= 7 and rtc_hours < 17)                         {
                                                                    day_light_flag = true;
                                                                    night_light_flag = true;  }
-  if (rtc_hours >= 18 and rtc_hours < 21)                        {
+  if (rtc_hours >= 17 and rtc_hours < 20)                        {
                                                                    day_light_flag = false;
                                                                    night_light_flag = true;  }
-  if (rtc_hours >= 21)                                           {
+  if (rtc_hours >= 20)                                           {
                                                                    day_light_flag = false;
                                                                    night_light_flag = false; }
 
@@ -649,6 +663,7 @@ void loop() {
   apply_changes();
 
   if (millis() >= (screen_timer + 750)) {
+    screen_timer = millis();
     print_info_screen(0);
   }
   
