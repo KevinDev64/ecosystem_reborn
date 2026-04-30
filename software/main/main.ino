@@ -227,12 +227,12 @@ void setup_settings() {
       if (left_button_flag) { 
         *settings_values_table[setting_index] -= 0.1; 
         eeprom_address = setting_index * 4;
-        EEPROM.write(eeprom_address, *settings_values_table[setting_index]);
+        EEPROM.put(eeprom_address, *settings_values_table[setting_index]);
       }
       if (right_button_flag) {
         *settings_values_table[setting_index] += 0.1;
         eeprom_address = setting_index * 4;
-        EEPROM.write(eeprom_address, *settings_values_table[setting_index]);
+        EEPROM.put(eeprom_address, *settings_values_table[setting_index]);
       } 
       if (ok_button_flag)     {
         if (setting_index == 7) { setting_index = 0; }
@@ -284,15 +284,33 @@ void get_control_buttons_values() {
 }
 
 void set_default_values() {
-  EEPROM.write(0, air_temp_min_crit);
-  EEPROM.write(4, air_temp_min);
-  EEPROM.write(8, air_temp_max);
-  EEPROM.write(12, air_temp_max_crit);
-  EEPROM.write(16, ground_temp_min);
-  EEPROM.write(20, ground_temp_max);
-  EEPROM.write(24, ground_hum_min);
-  EEPROM.write(28, ground_hum_max);
+  int addr = 0;
 
+  EEPROM.put(addr, air_temp_min_crit);
+  addr += sizeof(float);
+
+  EEPROM.put(addr, air_temp_min);
+  addr += sizeof(float);
+
+  EEPROM.put(addr, air_temp_max);
+  addr += sizeof(float);
+
+  EEPROM.put(addr, air_temp_max_crit);
+  addr += sizeof(float);
+
+  EEPROM.put(addr, ground_temp_min);
+  addr += sizeof(float);
+
+  EEPROM.put(addr, ground_temp_max);
+  addr += sizeof(float);
+
+  EEPROM.put(addr, ground_hum_min);
+  addr += sizeof(float);
+
+  EEPROM.put(addr, ground_hum_max);
+  addr += sizeof(float);
+
+  // init key
   EEPROM.write(1023, EEPROM_INIT_KEY);
 }
 
@@ -310,7 +328,7 @@ void print_jumper_warning() {
 
 void read_settings_from_EEPROM() {
   for (int i = 0; i <= 7; i++) {
-    *settings_values_table[i] = EEPROM.read(i * 4);
+    EEPROM.get(i * sizeof(float), *settings_values_table[i]);
   }
 }
 
