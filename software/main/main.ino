@@ -10,7 +10,6 @@
 #include <LiquidCrystal_I2C.h> // LCD lib 
 #include <iarduino_RTC.h>
 #include <EEPROM.h> // Arduino EEPROM lib
-#include <string.h> // string type
 
 
 // constant global values section 
