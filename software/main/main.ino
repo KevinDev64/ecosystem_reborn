@@ -335,10 +335,13 @@ void print_info_screen(uint8_t screen_type) {
   switch (screen_type) {
     case 0:
       print_screen_0();
+      break;
     case 1:
       print_screen_1();
+      break;
     case 2:
       print_screen_2();
+      break;
   }
 }
 
@@ -609,8 +612,8 @@ void loop() {
   if (millis() >= (screen_timer + 750)) {
     screen_timer = millis();
     lcd.clear();
-    // print_info_screen(screen_type);
-    print_screen_1();
+    print_info_screen(screen_type);
+    // print_screen_1();
     // lcd.print(String(screen_type));
   }
   
