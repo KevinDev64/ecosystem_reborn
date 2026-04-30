@@ -611,10 +611,7 @@ void loop() {
 
   if (millis() >= (screen_timer + 750)) {
     screen_timer = millis();
-    lcd.clear();
     print_info_screen(screen_type);
-    // print_screen_1();
-    // lcd.print(String(screen_type));
   }
   
   if (millis() >= (update_type_timer + 10000)) {
