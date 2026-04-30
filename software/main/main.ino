@@ -10,7 +10,6 @@
 #include <LiquidCrystal_I2C.h> // LCD lib 
 #include <iarduino_RTC.h>
 #include <EEPROM.h> // Arduino EEPROM lib
-#include <string.h> // string type
 
 
 // constant global values section 
@@ -41,8 +40,8 @@
 
 // Ground humidity sensor calibration values 
 // TODO: debug script for calibration
-#define GROUND_HUM_MAX 255
-#define GROUND_HUM_MIN 600
+#define GROUND_HUM_MAX 215
+#define GROUND_HUM_MIN 485
 
 // EEPROM init values
 #define EEPROM_INIT_ADDR 1023
@@ -124,46 +123,16 @@ float* settings_values_table[8] {
   &ground_hum_max
 };
 
-// Symbols 
-byte drop_full_symbol[] = {
-  B00100,
-  B01110,
-  B01110,
-  B11111,
-  B11111,
-  B11111,
-  B11111,
-  B01110
-};
 
-byte drop_empty_symbol[] = {
-  B00100,
-  B01010,
-  B01010,
-  B10001,
-  B10001,
-  B10001,
-  B10001,
-  B01110
-};
-
-byte light_symbol[] = {
-  B00000,
-  B00000,
-  B10101,
-  B01110,
-  B11111,
-  B01110,
-  B10101,
-  B00000
-};
 
 void setup() {
   // init & clear LCD
   lcd.init();
+  lcd.home();
   lcd.backlight();
   lcd.setCursor(0, 0);
   lcd.clear();
+  lcd.noAutoscroll();
 
   // init custom chars
   // lcd.createChar(0, drop_full_symbol);
@@ -257,12 +226,12 @@ void setup_settings() {
       if (left_button_flag) { 
         *settings_values_table[setting_index] -= 0.1; 
         eeprom_address = setting_index * 4;
-        EEPROM.write(eeprom_address, *settings_values_table[setting_index]);
+        EEPROM.put(eeprom_address, *settings_values_table[setting_index]);
       }
       if (right_button_flag) {
         *settings_values_table[setting_index] += 0.1;
         eeprom_address = setting_index * 4;
-        EEPROM.write(eeprom_address, *settings_values_table[setting_index]);
+        EEPROM.put(eeprom_address, *settings_values_table[setting_index]);
       } 
       if (ok_button_flag)     {
         if (setting_index == 7) { setting_index = 0; }
@@ -314,15 +283,33 @@ void get_control_buttons_values() {
 }
 
 void set_default_values() {
-  EEPROM.write(0, air_temp_min_crit);
-  EEPROM.write(4, air_temp_min);
-  EEPROM.write(8, air_temp_max);
-  EEPROM.write(12, air_temp_max_crit);
-  EEPROM.write(16, ground_temp_min);
-  EEPROM.write(20, ground_temp_max);
-  EEPROM.write(24, ground_hum_min);
-  EEPROM.write(28, ground_hum_max);
+  int addr = 0;
 
+  EEPROM.put(addr, air_temp_min_crit);
+  addr += sizeof(float);
+
+  EEPROM.put(addr, air_temp_min);
+  addr += sizeof(float);
+
+  EEPROM.put(addr, air_temp_max);
+  addr += sizeof(float);
+
+  EEPROM.put(addr, air_temp_max_crit);
+  addr += sizeof(float);
+
+  EEPROM.put(addr, ground_temp_min);
+  addr += sizeof(float);
+
+  EEPROM.put(addr, ground_temp_max);
+  addr += sizeof(float);
+
+  EEPROM.put(addr, ground_hum_min);
+  addr += sizeof(float);
+
+  EEPROM.put(addr, ground_hum_max);
+  addr += sizeof(float);
+
+  // init key
   EEPROM.write(1023, EEPROM_INIT_KEY);
 }
 
@@ -340,7 +327,7 @@ void print_jumper_warning() {
 
 void read_settings_from_EEPROM() {
   for (int i = 0; i <= 7; i++) {
-    *settings_values_table[i] = EEPROM.read(i * 8);
+    EEPROM.get(i * sizeof(float), *settings_values_table[i]);
   }
 }
 
@@ -355,19 +342,7 @@ void print_welcome() {
   lcd.setCursor(0, 2);
   lcd.print("Made by KevinDev64");
   lcd.setCursor(0, 3);
-
-  switch (r) {
-    case 0:
-      lcd.print("Have a good day!");
-    case 1:
-      lcd.print("All is possible.");
-    case 2:
-      lcd.print("You make it!");
-    case 3:
-      lcd.print("You define the life.");
-    case 4:
-      lcd.print("Keep flying!");
-  }
+  lcd.print("You define a life.");
 
   delay(3000);
 }
@@ -377,10 +352,13 @@ void print_info_screen(uint8_t screen_type) {
   switch (screen_type) {
     case 0:
       print_screen_0();
+      break;
     case 1:
       print_screen_1();
+      break;
     case 2:
       print_screen_2();
+      break;
   }
 }
 
@@ -393,7 +371,6 @@ void print_screen_0() {
   lcd.print(String(rtc_minutes));
 
   lcd.print(" ");
-  print_blink();
 
   lcd.setCursor(0, 1);
   print_flag_state(air_heater_flag, air_cooler_flag, String("AIR"));
@@ -424,7 +401,6 @@ void print_screen_1() {
   lcd.print(String(rtc_minutes));
 
   lcd.print(" ");
-  print_blink();
 
   lcd.setCursor(0, 1);
   print_sensors(air_temp, air_humidity, String("AIR   "));
@@ -447,7 +423,6 @@ void print_screen_2() {
   lcd.print(String(rtc_minutes));
 
   lcd.print(" ");
-  print_blink();
 
   lcd.setCursor(0, 1);
   lcd.print("made by KevinDev64");
@@ -465,7 +440,6 @@ void print_sensors(float temperature, int humudity, String name) {
   lcd.print(name);
   lcd.print(" ");
   lcd.print(String(temperature));
-  lcd.print("\xef");
   lcd.print(" ");
   lcd.print(String(humudity));
 }
@@ -477,11 +451,11 @@ void print_vent_state() {
     return;
   }
   if (vent_in_flag) {
-    lcd.print("\xd9");
+    lcd.print("i");
     return;
   }
   if (vent_out_flag) {
-    lcd.print("\xda");
+    lcd.print("o");
     return;
   }
 }
@@ -489,17 +463,17 @@ void print_vent_state() {
 void print_water_state() {
   lcd.print("WATER:");
   if (water_pump_flag) {
-    lcd.print("\x92");
+    lcd.print("U");
     // lcd.write(1);
   } else {
     // lcd.write(0);
-    lcd.print("\x93");
+    lcd.print("O");
   }
 }
 
 void print_light_state() {
   // lcd.write(2);
-  lcd.print("\x2a");
+  lcd.print("L");
   lcd.print(":");
   if (day_light_flag) {
     lcd.print("A");
@@ -513,29 +487,19 @@ void print_light_state() {
   return;
 }
 
-void print_blink() {
-  if (blink_state) {
-    lcd.print("\x92");
-    blink_state = false;
-  } else {
-    lcd.print("\x93");
-    blink_state = true;
-  }
-}
-
 void print_flag_state(bool positive_changes_flag, bool negative_changes_flag, String name) {
   lcd.print(name);
   lcd.print(":");
   if (positive_changes_flag) {
-    lcd.print("\xd9");
+    lcd.print("U");
     return;
   }
   if (negative_changes_flag) {
-    lcd.print("\xda");
+    lcd.print("D");
     return;
   }
   if ((!positive_changes_flag) and !(negative_changes_flag)) {
-    lcd.print("\x94");
+    lcd.print("O");
     return;
   }
 }
@@ -552,7 +516,7 @@ void print_ecosystem_status() {
 void get_rtc_time() {
   time.gettime();
   rtc_minutes = time.minutes;
-  rtc_hours = time.hours;
+  rtc_hours = time.Hours;
 }
 
 void read_air_sensor()
@@ -664,7 +628,7 @@ void loop() {
 
   if (millis() >= (screen_timer + 750)) {
     screen_timer = millis();
-    print_info_screen(0);
+    print_info_screen(screen_type);
   }
   
   if (millis() >= (update_type_timer + 10000)) {
