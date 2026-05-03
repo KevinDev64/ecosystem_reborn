@@ -508,7 +508,7 @@ void print_flag_state(bool positive_changes_flag, bool negative_changes_flag, St
 
 void print_ecosystem_status() {
   lcd.print("STATUS: ");
-  if (air_heater_flag or air_cooler_flag or ground_heater_flag or water_pump_flag) {
+  if (air_heater_flag or air_cooler_flag or ground_heater_flag) {
     lcd.print("bad");
   } else {
     lcd.print("ok");
