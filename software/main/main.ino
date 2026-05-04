@@ -89,7 +89,9 @@ unsigned short rtc_minutes {};
 
 // instant values
 float air_temp, ground_temp;
-int air_humidity, ground_humidity;
+int air_humidity;
+
+int ground_humidity;
 
 // Define sensors, LCD, RTC
 OneWire oneWire(GROUND_TEMP_SENSOR_PIN);
@@ -446,15 +448,15 @@ void print_sensors(float temperature, int humudity, String name) {
 
 void print_vent_state() {
   lcd.print("VENT:");
-  if (vent_in_flag and vent_out_flag) {
-    lcd.print("A");
-    return;
-  }
-  if (vent_in_flag) {
+  if (air_heater_flag) {
     lcd.print("i");
     return;
   }
-  if (vent_out_flag) {
+  if (air_cooler_flag) {
+    lcd.print("a");
+    return;
+  }
+  if (!(air_cooler_flag) and !(air_heater_flag)) {
     lcd.print("o");
     return;
   }
@@ -506,7 +508,7 @@ void print_flag_state(bool positive_changes_flag, bool negative_changes_flag, St
 
 void print_ecosystem_status() {
   lcd.print("STATUS: ");
-  if (air_heater_flag or air_cooler_flag or ground_heater_flag or water_pump_flag) {
+  if (air_heater_flag or air_cooler_flag or ground_heater_flag) {
     lcd.print("bad");
   } else {
     lcd.print("ok");
@@ -526,9 +528,26 @@ void read_air_sensor()
 }
 
 void read_ground_sensors() {
-  int raw_ground_hum;
-  raw_ground_hum = analogRead(GROUND_HUM_SENSOR_PIN);
-  ground_humidity = map(raw_ground_hum, GROUND_HUM_MIN, GROUND_HUM_MAX, 0, 100);
+  int raw_ground_hum_1;
+  int raw_ground_hum_2;
+  int raw_ground_hum_3;
+  int raw_ground_hum_4;
+  int raw_ground_hum_5;
+  int raw_ground_hum_avg;
+
+  raw_ground_hum_1 = analogRead(GROUND_HUM_SENSOR_PIN);
+  delay(5);
+  raw_ground_hum_2 = analogRead(GROUND_HUM_SENSOR_PIN);
+  delay(5);
+  raw_ground_hum_3 = analogRead(GROUND_HUM_SENSOR_PIN);
+  delay(5);
+  raw_ground_hum_4 = analogRead(GROUND_HUM_SENSOR_PIN);
+  delay(5);
+  raw_ground_hum_5 = analogRead(GROUND_HUM_SENSOR_PIN);
+  delay(5);
+
+  raw_ground_hum_avg = (raw_ground_hum_1 + raw_ground_hum_2 + raw_ground_hum_3 + raw_ground_hum_4 + raw_ground_hum_5) / 5;
+  ground_humidity = map(raw_ground_hum_avg, GROUND_HUM_MIN, GROUND_HUM_MAX, 0, 100);
 
   ground_temp_sensor.requestTemperatures();
   ground_temp = ground_temp_sensor.getTempCByIndex(0);
@@ -594,12 +613,19 @@ void apply_changes() {
     digitalWrite(AIR_HEATER_RELAY_PIN, HIGH); 
   }
 
-  if (air_heater_flag or air_cooler_flag) {
+  if (air_heater_flag) {
     digitalWrite(VENT_IN_RELAY_PIN, HIGH);
+    digitalWrite(VENT_OUT_RELAY_PIN, LOW);
+  }
+
+  if (air_cooler_flag) {
+    digitalWrite(VENT_IN_RELAY_PIN, HIGH);
+    digitalWrite(VENT_OUT_RELAY_PIN, HIGH);
   }
 
   if ((!air_heater_flag) and (!air_cooler_flag)) {
     digitalWrite(VENT_IN_RELAY_PIN, LOW);
+    digitalWrite(VENT_OUT_RELAY_PIN, HIGH);
   }
 
   if (ground_heater_flag == false) { 
